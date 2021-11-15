@@ -36,9 +36,11 @@
 #' cutoffs1 <- new_par[names(new_par) == "cutoffs1"];
 #' CDF_breaks <- sort(unique(data.subset.1$CDF), decreasing = FALSE)
 #'
-#' nonspat.rc1 <- portfolio_rc(cutoffs1, CDF_breaks, nonspat_lv$lv1,
-#'                             sqrt(field1.tau2 + field1.sigma2),
-#'                             replacement.cost = 1)
+#' # The following takes 4 minutes on a PC with characteristics:
+#' # Intel(R) Xeon (R) W-2112 CPU Processor @ 3.60GHz; 32GB of RAM;
+#' # nonspat.rc1 <- portfolio_rc(cutoffs1, CDF_breaks, nonspat_lv$lv1,
+#' #                             sqrt(field1.tau2 + field1.sigma2),
+#' #                             replacement.cost = 1)
 
 portfolio_rc <- function(cutoffs, damage.states, lv, ordinal.sd, replacement.cost = 1, no.building = NULL){
   if(is.null(no.building)){no.building <- rep(1, nrow(lv))}

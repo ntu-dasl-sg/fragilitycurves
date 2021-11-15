@@ -52,10 +52,10 @@ beta2 <- exp(new_par["log_slope2"]);
 
 data(oq_sim)
 
-# The following takes 2 seconds in a PC with characteristics:
+# The following takes 2 minutes on a PC with characteristics:
 # Intel(R) Xeon (R) W-2112 CPU Processor @ 3.60GHz; 32GB of RAM; Windows 10 64-bit:
-nonspat_lv <- lv_sim(model = "Non-spatial", data = oq_sim,
-                     fieldsim = NULL, field1sim = NULL, field2sim = NULL,
-                     slope1 = beta1, slope2 = beta2,
-                     shared_sill = field.tau2 + field.sigma2)
+#nonspat_lv <- lv_sim(model = "Non-spatial", data = oq_sim,
+#                    fieldsim = NULL, field1sim = NULL, field2sim = NULL,
+#                    slope1 = beta1, slope2 = beta2,
+#                    shared_sill = field.tau2 + field.sigma2)
 }

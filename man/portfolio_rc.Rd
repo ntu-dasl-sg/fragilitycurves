@@ -41,12 +41,14 @@ new_par <- convert_cutoffs(demo_spatial_fit$par)
 # Spatial model parameters:
 field.sigma2 <- exp(new_par["log_sigma_2"]);
 field.tau2 <- exp(new_par["log_tau_2"]);
+field1.sigma2 <- exp(new_par["log_sigma1_2"]);
+field1.tau2 <- exp(new_par["log_tau1_2"]);
 beta1 <- exp(new_par["log_slope1"]);
 beta2 <- exp(new_par["log_slope2"]);
 
 data(oq_sim)
 
-# The following takes 2 seconds in a PC with characteristics:
+# The following takes 2 minutes on a PC with characteristics:
 # Intel(R) Xeon (R) W-2112 CPU Processor @ 3.60GHz; 32GB of RAM; Windows 10 64-bit:
 nonspat_lv <- lv_sim(model = "Non-spatial", data = oq_sim,
                      fieldsim = NULL, field1sim = NULL, field2sim = NULL,
@@ -56,7 +58,9 @@ nonspat_lv <- lv_sim(model = "Non-spatial", data = oq_sim,
 cutoffs1 <- new_par[names(new_par) == "cutoffs1"];
 CDF_breaks <- sort(unique(data.subset.1$CDF), decreasing = FALSE)
 
-nonspat.rc1 <- portfolio_rc(cutoffs1, CDF_breaks, nonspat_lv$lv1,
-                            sqrt(field1.tau2 + field1.sigma2),
-                            replacement.cost = 1)
+# The following takes 4 minutes on a PC with characteristics:
+# Intel(R) Xeon (R) W-2112 CPU Processor @ 3.60GHz; 32GB of RAM;
+# nonspat.rc1 <- portfolio_rc(cutoffs1, CDF_breaks, nonspat_lv$lv1,
+#                             sqrt(field1.tau2 + field1.sigma2),
+#                             replacement.cost = 1)
 }

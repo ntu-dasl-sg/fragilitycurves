@@ -14,9 +14,10 @@
 #' data.subset.1 <- damage_simulation[damage_simulation$building_cat == 1, ]
 #' data.subset.2 <- damage_simulation[damage_simulation$building_cat == 2, ]
 #'
-#' # This takes a few minutes:
-#' # aic_val <- submodel_aic(data.1 = data.subset.1,
-#' #                         data.2 = data.subset.2, model.fit = demo_spatial_fit)
+#' # The following takes 10 seconds on a PC with characteristics:
+#' # Intel(R) Xeon (R) W-2112 CPU Processor @ 3.60GHz; 32GB of RAM;
+#' aic_val <- submodel_aic(data.1 = data.subset.1,
+#'                          data.2 = data.subset.2, model.fit = demo_spatial_fit)
 
 submodel_aic <- function(data.1, data.2, model.fit){
 
