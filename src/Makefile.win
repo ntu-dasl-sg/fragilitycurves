@@ -1,0 +1,12 @@
+all: spatialordinal_newmarginals_shared.dll pgaspatial_newmarginals_shared.dll nonspatial_newmarginals_shared.dll
+	# Comment here preserves the prior tab
+spatialordinal_newmarginals_shared.dll: spatialordinal_newmarginals_shared.cpp
+	Rscript --vanilla -e "TMB::compile('spatialordinal_newmarginals_shared.cpp', '-O1 -g',DLLFLAGS='', safeunload = FALSE, safebounds = FALSE)"
+pgaspatial_newmarginals_shared.dll: pgaspatial_newmarginals_shared.cpp
+	Rscript --vanilla -e "TMB::compile('pgaspatial_newmarginals_shared.cpp', '-O1 -g',DLLFLAGS='', safeunload = FALSE, safebounds = FALSE)"
+nonspatial_newmarginals_shared.dll: nonspatial_newmarginals_shared.cpp
+	Rscript --vanilla -e "TMB::compile('nonspatial_newmarginals_shared.cpp', '-O1 -g',DLLFLAGS='', safeunload = FALSE, safebounds = FALSE)"
+
+clean:
+	rm -rf *.dll *.o
+
