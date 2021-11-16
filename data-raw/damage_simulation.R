@@ -102,7 +102,7 @@ hist(field.loc.mean)
 # Define the gstat object (spatial model)
 g.dummy1 <- gstat(formula=z~1, locations=~Easting+Northing, dummy=T, beta=0, model=vgm(psill=field1.sigma2,range=field1.phi,nugget=0,kappa=1,model="Mat"))
 
-set.seed(3)
+set.seed(13)
 temp.time <- proc.time()[3]
 field1.sim <- predict(g.dummy1, newdata=UTM.pts[UTM.pts$building_cat == 1, ], nsim=1)
 time.taken.3 <- proc.time()[3] - temp.time
@@ -113,7 +113,7 @@ time.taken.3 <- proc.time()[3] - temp.time
 # Define the gstat object (spatial model)
 g.dummy2 <- gstat(formula=z~1, locations=~Easting+Northing, dummy=T, beta=0, model=vgm(psill=field2.sigma2,range=field2.phi,nugget=0,kappa=1,model="Mat"))
 
-set.seed(4)
+set.seed(14)
 temp.time <- proc.time()[3]
 field2.sim <- predict(g.dummy2, newdata=UTM.pts[UTM.pts$building_cat == 2, ], nsim=1)
 time.taken.3 <- proc.time()[3] - temp.time
@@ -128,7 +128,7 @@ logPGA_sim[is.na(logPGA_sim)] <- -Inf
 logPGA_sim
 
 # Generate random error terms to be added to the non-spatial and PGA-spatial latent variables only.
-set.seed(5)
+set.seed(15)
 
 iid.error3 <- matrix(rnorm(n = nrow(UTM.pts), mean = 0, sd = sqrt(field.tau2 + field.sigma2)), nrow = nrow(UTM.pts), ncol = 1)
 

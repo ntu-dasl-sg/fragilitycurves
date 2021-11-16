@@ -56,6 +56,10 @@ nonspat_lv <- lv_sim(model = "Non-spatial", data = oq_sim,
                      shared_sill = field.tau2 + field.sigma2)
 
 cutoffs1 <- new_par[names(new_par) == "cutoffs1"];
+
+data(damage_simulation)
+data.subset.1 <- damage_simulation[damage_simulation$building_cat == 1, ]
+
 CDF_breaks <- sort(unique(data.subset.1$CDF), decreasing = FALSE)
 
 # The following takes 4 minutes on a PC with characteristics:

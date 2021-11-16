@@ -41,10 +41,11 @@ new_par <- convert_cutoffs(demo_spatial_fit$par)
 study_shp <- sp::spTransform(haiti_admin0, sp::CRS("+proj=utm +zone=18 ellps=WGS84"))
 
 # Obtain the shapefile for Port-au-Prince:
-pap_shp <- haiti_admin2[haiti_admin2 == "Port-au-Prince", ]
+pap_shp <- haiti_admin2[haiti_admin2$ADM2_EN == "Port-au-Prince", ]
 pap_shp <- sp::spTransform(pap_shp, sp::CRS("+proj=utm +zone=18 ellps=WGS84"))
 
 data.subset.1 <- damage_simulation[damage_simulation$building_cat == 1, ]
+data.subset.2 <- damage_simulation[damage_simulation$building_cat == 2, ]
 
 kriged_rasters <- kriged_fields(demo_spatial_fit, data.subset.1,
                                 data.subset.2, pap_shp, mean_PGA)

@@ -15,4 +15,4 @@ Imports:
 LinkingTo: 
     TMB, RcppEigen
 Suggests:
-    rgdal, sp
+    rgdal, sp, MASS, rgeos

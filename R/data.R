@@ -66,15 +66,28 @@
 #' @source Haiti Subnational Administrative Boundaries contributed by the UN office for the Coordination of Humanitarian Affairs (OCHA) country office in Haiti, available on the Humanitarian Data Exchange (HDX).
 "haiti_admin0"
 
-#' Simulated log-transformed peak ground acceleration (PGA) values for 150 unreinforced block walls (Building Category 1) and 150 stone masonry (Building Category 2) buildings within a 2km x 2km grid in Port-au-Prince, Haiti, based on 1 million stochastic event sets of one year duration.
+#' Simulated log-transformed peak ground acceleration (PGA) values for 300 buildings in Port-au-Prince, Haiti
+#'
+#' A dataframe of simulated log-transformed peak ground acceleration (PGA) values for 150 unreinforced block walls (Building Category 1) and 150 stone masonry (Building Category 2) buildings within a 2km x 2km grid in Port-au-Prince, Haiti, based on 1 million stochastic event sets of one year duration.
 #'
 #' @format A dataframe with 300 rows and 156494 variables:
 #' \describe{
-#' \item{lon} Longitude coordinates (in degrees) of building.
-#' \item{lat} Latitude coordinates (in degrees) of building.
-#' \item{building_cat}{Building category, 1 for unreinforced block walls and 2 for stone masonry}
-#' \item{`10`} Simulated log(PGA) values for each building from stochastic event set 10. The remaining columns denote the simulated values from other stochastic event sets where shaking was observed.
+#' \item{lon}{Longitude coordinates (in degrees) of building.}
+#' \item{lat}{Latitude coordinates (in degrees) of building.}
+#' \item{building_cat}{Building category, 1 for unreinforced block walls and 2 for stone masonry.}
+#' \item{`10`}{Simulated log(PGA) values for each building from simulated event 10. The remaining columns denote the simulated values from events where shaking was observed.}
 #' }
 #' @source Simulated using the OpenQuake Engine.
 "oq_sim"
 
+#' Matching list for simulated OpenQuake events and their stochastic event sets of one year duration.
+#'
+#' A dataframe of OpenQuake event IDs and their corresponding realisation ID denoting the year of occurrence or stochastic event set.
+#'
+#' @format A dataframe with 166882 rows and 2 variables:
+#' \describe{
+#' \item{event_id}{Event ID of a simulated earthquake event affecting the selected portfolio of buildings in \code{oq_sim} where the corresponding logPGA values are given in the column named after the event ID.}
+#' \item{rlz_id}{Realisation ID indicating the year of occurrence of stochastic event set (SES) of one year duration. Note that we've considered a total of 1 million SES in our simulations.}
+#' }
+#' @source Simulated using the OpenQuake Engine.
+"event_ses_list"

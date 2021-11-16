@@ -3,14 +3,14 @@
 \docType{data}
 \name{oq_sim}
 \alias{oq_sim}
-\title{Simulated log-transformed peak ground acceleration (PGA) values for 150 unreinforced block walls (Building Category 1) and 150 stone masonry (Building Category 2) buildings within a 2km x 2km grid in Port-au-Prince, Haiti, based on 1 million stochastic event sets of one year duration.}
+\title{Simulated log-transformed peak ground acceleration (PGA) values for 300 buildings in Port-au-Prince, Haiti}
 \format{
 A dataframe with 300 rows and 156494 variables:
 \describe{
-\item{lon} Longitude coordinates (in degrees) of building.
-\item{lat} Latitude coordinates (in degrees) of building.
-\item{building_cat}{Building category, 1 for unreinforced block walls and 2 for stone masonry}
-\item{\code{10}} Simulated log(PGA) values for each building from stochastic event set 10. The remaining columns denote the simulated values from other stochastic event sets where shaking was observed.
+\item{lon}{Longitude coordinates (in degrees) of building.}
+\item{lat}{Latitude coordinates (in degrees) of building.}
+\item{building_cat}{Building category, 1 for unreinforced block walls and 2 for stone masonry.}
+\item{\code{10}}{Simulated log(PGA) values for each building from simulated event 10. The remaining columns denote the simulated values from events where shaking was observed.}
 }
 }
 \source{
@@ -20,6 +20,6 @@ Simulated using the OpenQuake Engine.
 oq_sim
 }
 \description{
-Simulated log-transformed peak ground acceleration (PGA) values for 150 unreinforced block walls (Building Category 1) and 150 stone masonry (Building Category 2) buildings within a 2km x 2km grid in Port-au-Prince, Haiti, based on 1 million stochastic event sets of one year duration.
+A dataframe of simulated log-transformed peak ground acceleration (PGA) values for 150 unreinforced block walls (Building Category 1) and 150 stone masonry (Building Category 2) buildings within a 2km x 2km grid in Port-au-Prince, Haiti, based on 1 million stochastic event sets of one year duration.
 }
 \keyword{datasets}

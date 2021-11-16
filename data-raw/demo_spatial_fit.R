@@ -16,12 +16,15 @@ frag.model.2 <- polr(CDF ~ logPGA, data = data.subset.2,
 
 lower_lim <- rep(-Inf, 23); upper_lim <- rep(Inf, 23);
 
-# 1. Use spatial parameters from preliminary analyses on a larger dataset for bounds:
-PGA.phi <- exp(1.791186);
-log_phi_max <- log(2*PGA.phi); log_phi_min <- log(0.5*PGA.phi);
+shared.range <- seq(0, 10, by = 1)
+shared.vgm <- as.numeric(exp(-1.2313959))*(1-geoR::matern(shared.range, phi= as.numeric(exp(0.05)), kappa = 1)) + as.numeric(exp(-9.1425902))
+shared.df <- data.frame("x" = shared.range, "y" = shared.vgm)
 
-# 2. Common limits between Subsets:
-log_phi12_min <- log(0.15);
+ggplot(data = shared.df, aes(x = x, y = y)) + geom_line() + labs(x = "km", y = expression(gamma(h))) + theme_classic() + theme(plot.title = element_text(hjust = 0.5)) + ggtitle("(a) Shared spatial field")
+
+log_phi_max <- log(3); log_phi_min <- log(0.05);
+
+# logphi: max of 3, min of 0.05.
 
 log_slope1_max <- log(1.5*frag.model.1$coefficients);
 log_slope1_min <- log(0.5*frag.model.2$coefficients)
@@ -53,12 +56,13 @@ factor_max <- 5*max(c(cutoff_factors1, cutoff_factors2));
 factor_min <- 0.5*min(c(cutoff_factors1, cutoff_factors2))
 
 lower_lim[1] <- log_phi_min;
-lower_lim[c(4, 7)] <- log_phi12_min
 
 lower_lim[10] <- log_slope1_min; lower_lim[11] <- log_slope2_min;
 
 lower_lim[12:17] <- c(cutoff11_min, rep(factor_min, length(cutoff_factors1)));
 lower_lim[18:23] <- c(cutoff21_min, rep(factor_min, length(cutoff_factors2)));
+
+upper_lim[c(1, 4, 7)] <- log_phi_max;
 
 upper_lim[10] <- log_slope1_max;  upper_lim[11] <- log_slope2_max;
 upper_lim[12:17] <- c(cutoff11_max, rep(factor_max, length(cutoff_factors1)));
