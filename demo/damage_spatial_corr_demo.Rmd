@@ -361,7 +361,7 @@ vgm_plot(spatial_fit$par, shared_range, cat_range)
 
 ```
 
-From Figure 7, we estimate a spatial range for the shared spatial field of about 15 km, while those specific to Building category 1 and 2 are found to be about 5-10km. The effect of these are shown in the estimated spatial fields around the captial of Port-au-Prince in Figures 8(b)-(c) and 9(b)-(c).  
+From Figure 7, we estimate a spatial range for the shared spatial field of about 15 km, while those specific to Building category 1 and 2 are found to be about 2-2.5km. The effect of these are shown in the estimated spatial fields around the captial of Port-au-Prince in Figures 8(b)-(c) and 9(b)-(c).  
 
 ```{r, warning = FALSE, message = FALSE} 
 
