@@ -121,10 +121,7 @@ spatial_ordinal <- function(model.1, model.2, data.1, data.2, start = NULL, lowe
     )
 
   }else{
-    parameters <- start;
-    parameters$field <- rep(0, nrow(data.subset.1) + nrow(data.subset.2));
-    parameters$field <- rep(0, nrow(data.subset.1) + nrow(data.subset.2));
-    parameters$field <- rep(0, nrow(data.subset.1) + nrow(data.subset.2));
+    parameters <- start
   }
 
   data.subset <- rbind(data.1, data.2)
