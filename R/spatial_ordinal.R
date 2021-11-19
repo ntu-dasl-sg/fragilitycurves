@@ -121,12 +121,10 @@ spatial_ordinal <- function(model.1, model.2, data.1, data.2, start = NULL, lowe
     )
 
   }else{
-    parameters <- start; parameters$log_tau_2 <- -9.1425902;
+    parameters <- start;
     parameters$field <- rep(0, nrow(data.subset.1) + nrow(data.subset.2));
     parameters$field <- rep(0, nrow(data.subset.1) + nrow(data.subset.2));
     parameters$field <- rep(0, nrow(data.subset.1) + nrow(data.subset.2));
-    parameters$log_slope1 <- log(slope.1.start);
-    parameters$log_slope2 <- log(slope.2.start);
   }
 
   data.subset <- rbind(data.1, data.2)

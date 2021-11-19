@@ -395,7 +395,7 @@ latent_var_1 <- latent_var(category = 1, new_par, kriged_rasters, mean_PGA, stud
 
 # Compute the latent variable mean raster for a building category and plot its contributing terms.
 
-  latent_var_2 <- latent_var(category = 2, new_par, kriged_rasters, mean_PGA, study_shp)
+latent_var_2 <- latent_var(category = 2, new_par, kriged_rasters, mean_PGA, study_shp)
 
 ```
 
@@ -710,7 +710,7 @@ load(file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_al_sim.RData")
 
 ```
 
-This operation takes about 20 minutes. As a check, we compute the average annual loss and associated standard deviation for each model. The results for building category 1 and 2 are given in Table 1 and 2 respectively.
+This operation takes about 15 minutes. As a check, we compute the average annual loss and associated standard deviation for each model. The results for building category 1 and 2 are given in Table 1 and 2 respectively.
 
 ```{r, echo = FALSE}
 
