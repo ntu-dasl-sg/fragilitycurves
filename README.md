@@ -4,7 +4,7 @@
 - This is work in progress: please inform Michele of any issues/suggestions and if you have any functions to add in.
 
 Instructions for installing the package:
-1. Download the tar.gz file from GitHub.
+1. Download the zip (for Windows) or tar.gz (for Mac) file from GitHub.
 2. If you do not have compiler tools already installed, follow [these instructions](https://github.com/kaskr/adcomp/wiki/Download) to install them. 
 3. In RStudio, install the non-standard package dependencies using:
 
@@ -12,4 +12,4 @@ Instructions for installing the package:
 install.packages(c('TMB', 'RcppEigen', 'raster', 'ggplot2', 'geoR', 'gridExtra', 'rgdal', 'sp', 'MASS', 'rgeos'))
 ```
 
-4. In RStudio, use "Tools" -> "Install Packages" ->  Install from: "Package Archive File" and find where the downloaded tar.gz is.
+4. In RStudio, use "Tools" -> "Install Packages" ->  Install from: "Package Archive File" and find where the downloaded zip or tar.gz is.
