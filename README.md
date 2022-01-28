@@ -10,7 +10,7 @@ Instructions for installing the package:
 3. In RStudio, install the non-standard package dependencies using:
 
 ```
-install.packages(c('TMB', 'RcppEigen', 'raster', 'ggplot2', 'geoR', 'gridExtra', 'rgdal', 'sp', 'MASS', 'rgeos'))
+install.packages(c('TMB', 'RcppEigen', 'raster', 'ggplot2', 'geoR', 'gridExtra', 'rgdal', 'sp', 'MASS', 'rgeos', 'rmarkdown'))
 ```
 
 4. In RStudio, use "Tools" -> "Install Packages" ->  Install from: "Package Archive File" and find where the downloaded zip or tar.gz is.
