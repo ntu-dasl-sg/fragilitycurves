@@ -29,6 +29,8 @@ library(rgeos)
 plot_output <- FALSE
 ```
 
+\newcommand\latexcode[1]{#1}
+
 ## Introduction
 
 In this analysis, we aim to demonstrate the functions in `fragilitycurves` R package which fit the non-spatial and spatial damage models as well as to compute the difference in resulting annual loss estimates.
@@ -405,7 +407,7 @@ $$
 [\beta_{i} (\log(IM) + \tilde{\mathbf{e}}^{S})] + \tilde{\mathbf{e}}^{(i)} & \text{[Non-spatial]} 
 \end{cases}
 $$
-where $\beta_{i}$ is the associated slope coefficient, $\log(IM)$ is the log-transformed PGA value, $\mathbf{u}^{S}$ is the shared spatial field with a Mat\'ern covariance and $\mathbf{e}^{S}$ is its dummy nugget component. Here, $\mathbf{u}^{i}$ is the building category specific field with a different Mat{\'e}rn covariance and $\mathbf{e}^{(i)}$ is its nugget or random error component while $\mathbf{e}^{D,i}$ is its dummy nugget component for kriging. Comparing the Damage-spatial case to the Non-spatial case, we see that the former decomposes the random error terms $\tilde{\mathbf{e}}^{S}\sim N(0, (\tau^2+\sigma^2)I$ and  $\tilde{\mathbf{e}}^{(i)}\sim N(0, (\tau^2 + \tau_{i}^2+\sigma_{i}^2)I)$ into $\mathbf{u}^{S} + \mathbf{e}^{S}$ and $\mathbf{u}^{(i)} + \mathbf{e}^{D,i} + \mathbf{e}^{(i)}$ respectively. The parameters $\tau^2$ and $\tau_{i}^2$ refer to the estimated nugget variances from the spatial ordinal model while $\sigma^2$ and $\sigma_{i}^2$ denote the partial sills. We have used $I$ to represent the identity matrix.  
+where $\beta_{i}$ is the associated slope coefficient, $\log(IM)$ is the log-transformed PGA value, $\mathbf{u}^{S}$ is the shared spatial field with a \latexcode{Mat\'{e}rn} covariance and $\mathbf{e}^{S}$ is its dummy nugget component. Here, $\mathbf{u}^{i}$ is the building category specific field with a different \latexcode{Mat\'{e}rn} covariance and $\mathbf{e}^{(i)}$ is its nugget or random error component while $\mathbf{e}^{D,i}$ is its dummy nugget component for kriging. Comparing the Damage-spatial case to the Non-spatial case, we see that the former decomposes the random error terms $\tilde{\mathbf{e}}^{S}\sim N(0, (\tau^2+\sigma^2)I$ and  $\tilde{\mathbf{e}}^{(i)}\sim N(0, (\tau^2 + \tau_{i}^2+\sigma_{i}^2)I)$ into $\mathbf{u}^{S} + \mathbf{e}^{S}$ and $\mathbf{u}^{(i)} + \mathbf{e}^{D,i} + \mathbf{e}^{(i)}$ respectively. The parameters $\tau^2$ and $\tau_{i}^2$ refer to the estimated nugget variances from the spatial ordinal model while $\sigma^2$ and $\sigma_{i}^2$ denote the partial sills. We have used $I$ to represent the identity matrix. 
 
 To compute the exceedance probabilities and mean replacement cost (the product of the replacement cost and mean central damage factor), we simulate the latent variable means, $\mu_{LV}$, denoted in the square brackets and compute the exceedance probability of damage state $k$ by $1 - \Phi\left(\frac{\xi_{k} - \mu_{LV}}{\tau_i}\right)$ for the Damage-spatial case and $1 - \Phi\left(\frac{\xi_{k} - \mu_{LV}}{\sqrt{\tau_{i}^{2} + \sigma_{i}^{2}}}\right)$ for the IM-spatial and Non-spatial cases.
 
@@ -568,7 +570,7 @@ time.taken.14 <- proc.time()[3] - temp.time # 14 min.
 load(file = "G:/Damage_Spatial_Correlation/R package/Data/demo_al_sim.RData")
 ```
 
-This operation takes about 15 minutes. As a check, we compute the average annual loss and associated standard deviation for each model. The results for building category 1 and 2 are given in Table 1 and 2 respectively.
+This operation takes about 14 minutes. As a check, we compute the average annual loss and associated standard deviation for each model. The results for building category 1 and 2 are given in Table 1 and 2 respectively.
 
 ```{r, echo = FALSE}
 al.stats <- data.frame("Model" = c("Non-spatial", "IM-spatial", "Damage-spatial"), 
