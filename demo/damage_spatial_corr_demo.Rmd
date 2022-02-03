@@ -1,7 +1,7 @@
 ---
 title: "Demo: modelling spatial correlation in damage"
 author: "Michele Nguyen"
-date: "11/16/2021"
+date: "03/02/2022"
 output:
   pdf_document: default
   html_document: default
@@ -422,7 +422,7 @@ field2.tau2 <- exp(new_par["log_tau2_2"]);
 beta1 <- exp(new_par["log_slope1"]); beta2 <- exp(new_par["log_slope2"]);
 ```
 
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 # a. Shared field:
 # Define the gstat object (spatial model)
 g.dummy <- gstat::gstat(formula=z~1, locations=~Easting+Northing, dummy=T, beta=0,
@@ -455,10 +455,15 @@ field2.sim <- predict(g.dummy2, newdata=UTM.pts[oq_sim$building_cat == 2, ],
 time.taken.4 <- proc.time()[3] - temp.time # 17 min.
 ```
 
-```{r, include = FALSE, eval = FALSE}
+```{r, include = FALSE, eval = TRUE}
 # save(field.sim, field1.sim, field2.sim,
 #      file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_field_sim.RData")
-load(file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_field_sim.RData")
+# load(file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_field_sim.RData")
+
+load(file = "G:/Damage_Spatial_Correlation/R package/Data/field.sim.RData")
+load(file = "G:/Damage_Spatial_Correlation/R package/Data/field1.sim.RData")
+load(file = "G:/Damage_Spatial_Correlation/R package/Data/field2.sim.RData")
+
 # field.sim, field1.sim, field2.sim.
 ```
 
@@ -470,7 +475,7 @@ The simulation of the shared field (`field.sim`) takes about 1 hour while the si
 
 With the estimated fields, we can compute the latent variable means corresponding to the spatial ordinal model for damage correlation as well as its submodels: the non-spatial model and the spatial model considering only the shared field, i.e. only spatial correlation due to $\log(PGA)$. To differentiate between these models, we will refer to them as the "Non-spatial", the "IM-spatial" and the "Damage-spatial" models. The `lv_sim` function compute the latent variable means for the different models:
 
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 temp.time <- proc.time()[3]
 nonspat_lv <- lv_sim(model = "Non-spatial", data = oq_sim, fieldsim = NULL,
                      field1sim = NULL, field2sim = NULL, slope1 = beta1, slope2 = beta2,
@@ -490,7 +495,7 @@ time.taken.7 <- proc.time()[3] - temp.time # 3 min.
 
 Based on the simulated latent variable means, we compute the annual losses by defining a replacement cost per building (here we use 1 unit cost) and computing the mean damage factor for each building as the weighted mean of the central damage factors where the weights are the estimated probabilities of being in each damage state. Then, by multiplying the replacement cost with the mean damage factor and summing this up over all the buildings affected and event in the year, we obtain the estimated annual loss. First, we compute the mean replacement cost of our building portfolios per event for the two building types separately:
 
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 # Cutoff values:
 cutoffs1 <- new_par[names(new_par) == "cutoffs1"];
 cutoffs2 <- new_par[names(new_par) == "cutoffs2"];
@@ -532,7 +537,7 @@ event_list <- colnames(oq_sim)[!(colnames(oq_sim) %in% c("loc_id", "lon", "lat",
                                                                    "building_cat"))]
 ```
                                                                                                                
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 nonspat.al1 <- nonspat.al2 <- pgaspat.al1 <- pgaspat.al2 <-
 damagespat.al1 <- damagespat.al2 <- rep(0, length(ses_list))
 temp.time <- proc.time()[3]
@@ -557,10 +562,10 @@ for (i in 1:length(event_list)){
 time.taken.14 <- proc.time()[3] - temp.time # 14 min.
 ```
 
-```{r, include = FALSE, eval = FALSE}
+```{r, include = FALSE}
 # save(nonspat.al1, nonspat.al2, pgaspat.al1, pgaspat.al2, damagespat.al1, damagespat.al2,
-#      file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_al_sim.RData")
-load(file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_al_sim.RData")
+     # file = "G:/Damage_Spatial_Correlation/R package/Data/demo_al_sim.RData")
+load(file = "G:/Damage_Spatial_Correlation/R package/Data/demo_al_sim.RData")
 ```
 
 This operation takes about 15 minutes. As a check, we compute the average annual loss and associated standard deviation for each model. The results for building category 1 and 2 are given in Table 1 and 2 respectively.
