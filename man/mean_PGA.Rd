@@ -6,22 +6,14 @@
 \title{Simulated peak ground acceleration in \%g for Haiti.}
 \format{
 A 212 x 212 raster of 1 degree longitude/latitude resolution projected to the UTM coordinate system.
-
-A 212 x 212 raster of 1 degree longitude/latitude resolution projected to the UTM coordinate system.
 }
 \source{
-Simulated from a bespoke ground shaking model.
-
 Simulated from a bespoke ground shaking model.
 }
 \usage{
 mean_PGA
-
-mean_PGA
 }
 \description{
-A raster of mean peak ground acceleration in \%g for Haiti.
-
 A raster of mean peak ground acceleration in \%g for Haiti.
 }
 \keyword{datasets}
