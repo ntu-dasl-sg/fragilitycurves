@@ -42,14 +42,6 @@
 #' @source Simulated from a bespoke ground shaking model.
 "mean_PGA"
 
-#' Simulated peak ground acceleration in %g for Haiti.
-#'
-#' A raster of mean peak ground acceleration in %g for Haiti.
-#'
-#' @format A 212 x 212 raster of 1 degree longitude/latitude resolution projected to the UTM coordinate system.
-#' @source Simulated from a bespoke ground shaking model.
-"mean_PGA"
-
 #' Shapefiles of Haiti level 2 administrative units.
 #'
 #' A SpatialPolygonsDataFrame containing shapefiles of level 2 administrative units in Haiti.
