@@ -1,7 +1,7 @@
 # fragilitycurves R package
 - This currently includes functions used for modelling fragility curves, specifically using ordinal models and accounting for spatial correlation in damage. Functions to estimate annual losses based on these are also included.
 - A tutorial using simulated earthquake data in Haiti is provided ("demo/damage_spatial_corr_demo.Rmd").
-- A similar analysis conducted on real-life damage data from the 2010 Haiti earthquake is given in "demo/haiti_data_demo.pdf".
+- A similar analysis conducted on real-life damage data from the 2010 Haiti earthquake is given in "demo/haiti_data_demo.pdf". This is repeated in "demo/haiti_demo_wider_bounds.pdf" where the parameter bounds are widen to reach relative convergence without the estimates hitting the set bounds.
 - This is work in progress: please inform Michele of any issues/suggestions and if you have any functions to add in.
 
 Instructions for installing the package:
