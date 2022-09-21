@@ -1,0 +1,914 @@
+---
+title: "Modelling spatial correlation in damage"
+author: "Michele Nguyen"
+date: "21/09/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=TRUE, warning = FALSE, message = FALSE}
+
+rm(list = ls())
+library(fragilitycurves) 
+library(MASS)
+library(gridExtra)
+library(ggplot2)
+library(sp)
+library(lemon) # For grid_arrange_shared_legend.
+library(raster)
+library(TMB)
+library(geoR) # For matern.
+library(dplyr)
+library(gstat) # For unconditional simulation of spatial fields.
+library(rgdal)
+library(rgeos)
+```
+
+```{r, include=FALSE}
+
+plot_output <- FALSE
+
+```
+
+\newcommand\latexcode[1]{#1}
+
+## Introduction
+
+In this analysis, we use the functions in `fragilitycurves` R package to fit the non-spatial and spatial damage models to the Haiti 2010 earthquake damage data as well as compute the difference in resulting annual loss estimates.
+
+## Data
+
+To fit the spatial ordinal model (or the Damage-spatial model), we use data for two building categories and a raster surface of mean peak ground acceleration (PGA). 
+
+```{r}
+
+# Read in mean PGA surface:
+mean.PGA.raster <- raster("D:/Documents/Proj_Damage_Spatial_Corr/Data/Haiti_shaking_Raster_v2.grd")
+
+mean.PGA.raster <- mean.PGA.raster*100 # Change to percentage of gravity.
+crs(mean.PGA.raster) <- CRS("+proj=longlat")
+
+mean.PGA.raster <- projectRaster(from = mean.PGA.raster, 
+                                 crs = CRS("+proj=utm +zone=18 ellps=WGS84"))
+res(mean.PGA.raster) # About 1km pixels.
+
+```
+
+```{r, warning = FALSE, message = FALSE}
+
+load("D:/Documents/Proj_Damage_Spatial_Corr/Data/new.demo.subset.1.RData")
+table(data.subset.1$CDF)
+
+load("D:/Documents/Proj_Damage_Spatial_Corr/Data/new.demo.subset.2.RData")
+table(data.subset.2$CDF)
+
+```
+
+`data.subset.1` contains damage data for *Building Category 1 (Unreinforced block walls)* and `data.subset.2` for *Building Category 2 (Stone masonry)*. Both datasets contain information for 98 buildings per assessed damage grade including their Easting and Northing coordinates, the log peak ground acceleration (`log(PGA)`) experienced and the central damage factor recorded (`CDF`). Here, we have a 7-level damage scale. We make a note of the CDFs in our data:
+
+```{r}
+CDF_breaks <- sort(unique(data.subset.1$CDF), decreasing = FALSE)
+CDF_breaks
+```
+
+Notice that the `CDF` column is ordered. We check the classes of the other columns:
+
+```{r}
+str(data.subset.1)
+```
+
+For most of the functions, the input datasets require at least the columns `CDF` (ordered factor), `PGA` (numeric), `logPGA` (numeric), `Easting` (numeric) and `Northing` (numeric). The functions also work if we do not a point-level dataset like that for Haiti, but instead have data aggregated into grids with the number of buildings of each type in each damage grade per grid square (this is the case for the Nepal 2015 earthquake damage data). To fit the non-spatial and spatial ordinal models, we can create an approximate point-level dataset by creating a dataframe with rows for each building and use the grid centroid coordinates, for example, to extract the PGA values. 
+
+## Fitting a non-spatial ordinal model
+
+We use the library `MASS` and its `polr` function to fit a non-spatial ordinal model to each of the data subsets.
+
+```{r}
+
+frag.model.1 <- polr(CDF ~ logPGA, data = data.subset.1, method = "probit", Hess = TRUE)
+frag.model.1$coefficients
+frag.model.1$zeta
+
+```
+
+```{r}
+
+frag.model.2 <- polr(CDF ~ logPGA, data = data.subset.2, method = "probit", Hess = TRUE)
+frag.model.2$coefficients
+frag.model.2$zeta
+
+```
+
+The first function in the `fragilitycurves` R package plots the fitted fragility curve against empirical proportions in the data subset. 
+
+```{r, message = FALSE}
+?frag_curve
+```
+
+We illustrate this for Building Category 1 in Fig. 1.
+
+```{r, fig.height = 10, fig.width = 9, fig.align = "center", fig.cap="Plot of the fragility curves fitted using the non-spatial ordinal model and the observed empirical proportions of damage state exceedance. Here, CDF refers to the central damage factor of a damage state."}
+ex.prob.1 <- frag_curve(frag.model.1, data = data.subset.1, plot = TRUE)
+```
+
+These exceedance probabilities were calculated by assuming that there is a latent variable with a normal distribution which has a mean of $\beta \log(PGA)$ and a standard deviation of $1$. The estimated cut-off points $\{\xi_{k}\}$, which are represented by the bold vertical lines in Fig. 2, demarcate the damage states so that $P(DS\geq k) = P(Z \geq \xi_{k})$. 
+
+```{r, height = 10, fig.width = 9, echo = FALSE, fig.align = "center", fig.cap = "The distribution of the latent variable $Z$ in the fitted non-spatial ordinal model for Building Category 1. The bold vertical lines denote the estimated cut-off points and the dotted vertical line denotes the mean which depends on the PGA value."}
+
+# Illustrative plot of the latent variable and ordinal regression (using parameters from spatial model):
+latent.val <-  frag.model.1$coefficients*sort(unique(data.subset.1$logPGA), decreasing = FALSE)
+k <- ceiling(length(latent.val)/2) # Choose PGA value - plot f(Y=y|Xbeta). 
+
+# latent.val.range <- seq(0, 1.3*tail(frag.model.1$zeta, 1), length.out = 100)
+latent.val.range <-latent.val[k] + (tail(frag.model.1$zeta, 1)-latent.val[k])*seq(-1.4, 1.4, length.out = 100)
+
+den.1 <- dnorm(latent.val.range, mean = latent.val[k], sd = 1)
+distr.df <- data.frame("x" = latent.val.range, "y" = den.1)
+
+
+label.df <- data.frame("x" = c(frag.model.1$zeta[1] - 0.25, frag.model.1$zeta[-(length(CDF_breaks)-1)] + diff(frag.model.1$zeta)*0.5, tail(frag.model.1$zeta, 1) + 0.25), "y" = rep(1.1*max(den.1), length(CDF_breaks)), "label" = paste("Grade", seq(1, length(CDF_breaks), by = 1)))
+
+
+plot.0 <- ggplot(data = distr.df, aes(x = x, y = y)) + geom_line() + geom_vline(xintercept = frag.model.1$zeta) + geom_segment(aes(x = latent.val[k], y = 0.02, xend = latent.val[k], yend = dnorm(latent.val[k], mean = latent.val[k], sd =  1)), linetype = "dotted") + labs(x = "Latent variable", y = "Probability density") + theme_classic()
+      
+# Shaded area for exceedance of State 5: 
+poly.x <-  seq(frag.model.1$zeta[5], max(latent.val.range), length.out = 200)
+shaded.df <- data.frame("x" = c(poly.x, rev(poly.x)))
+shaded.df$y <- 0
+shaded.df$y[1:length(poly.x)] <- dnorm(poly.x, mean = latent.val[k], sd = 1)
+
+plot.1 <- plot.0 + geom_text(data = label.df, aes(x = x, y = y, label = label)) + annotate("text", x = latent.val[k] + 0.05, y = 0.02, label = "beta~log(PGA)", size = 3.5, parse = TRUE) + theme(plot.title = element_text(hjust = 0.5), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+plot.1 <- plot.1 + geom_polygon(data = shaded.df, aes(x=x, y=y), fill = "grey", alpha = 0.4) + scale_x_continuous(name = "Latent variable", breaks = c(frag.model.1$zeta[1], frag.model.1$zeta[2], frag.model.1$zeta[3], frag.model.1$zeta[4], frag.model.1$zeta[5], frag.model.1$zeta[6]), labels = c(expression(xi[1], xi[2], xi[3], xi[4], xi[5], xi[6])), expand = c(0,0), limits = c(min(latent.val.range), max(latent.val.range))) + scale_y_continuous(expand = c(0,0), limits = c(0, 1.15*max(den.1)))
+
+plot.1
+
+```
+
+```{r, include = FALSE}
+
+if(plot_output == TRUE){
+  
+  jpeg("D:/Documents/Proj_Damage_Spatial_Corr/Graphics/fig1.jpg", width = 8, height = 4.5, units = "in", res = 300)
+  
+  plot.1
+  
+  dev.off()
+  
+}
+
+```
+
+
+With the estimated exceedance probabilities, we can compute the mean CDF given the PGA value. The second function in the R package is used for this but before that we define the unique upper limits of the damage bins as well as the bin lengths. For the Haiti 2010 earthquake damage data, these are described by the ATC-13 1985 damage scale.
+
+```{r}
+upper.bin <- c(0, 1, 10, 30, 60, 100)
+bin.length <- c(1, 1, 10, 20, 30, 40, 1)  # 0 and 100 are treated as point masses. 
+
+```
+
+```{r, message = FALSE}
+
+?mean_DF
+
+```
+
+```{r, height = 10, fig.width = 9, fig.align = "center", fig.cap = "(a) Estimated probability density for the damage factor for a given value of the peak ground acceleration (PGA); (b) Plot of the mean damage factor against PGA as estimated using the non-spatial ordinal model for Building Category 1."}
+
+mDF_vector <- mean_DF(frag.model.1, data.subset.1, upper.bin, bin.length, 
+                      ex.prob = ex.prob.1, plot = TRUE)
+```
+
+As shown in Figure 3(a), the non-spatial ordinal model produces probability density estimates that are somewhat consistent with the assumption of a Beta distribution with two point masses at damage factor $0$ and $100$, denoted by the red circles. Figure 3(b) illustrates how the estimated mean damage factor varies with PGA. 
+
+## Fitting a spatial ordinal model for two building categories
+
+Before we attempt to fit a spatial ordinal model which accounts for the spatial correlation in damage beyond that in ground motion intensity, we conduct some exploratory analysis on the data for the two selected building categories.
+
+```{r, echo = FALSE, message = FALSE}
+
+data(haiti_admin0)
+
+national_shp <- haiti_admin0
+
+study_shp <- spTransform(national_shp, CRS("+proj=utm +zone=18 ellps=WGS84"))
+
+# Plot damage states and building locations for two building types:
+study.reg.map <- geom_polygon(data = study_shp, aes(x = long, y = lat, group = group), colour = "black", fill = NA)
+
+UBW.points <- geom_point(data =data.subset.1, aes(x = Easting, y = Northing, colour = CDF)) 
+
+WM.points <- geom_point(data = data.subset.2, aes(x = Easting, y = Northing, colour = CDF)) 
+
+UBW.map <- ggplot() + study.reg.map + UBW.points + ggtitle("(a) Unreinforced block walls") + theme_classic() + theme(plot.title = element_text(hjust = 0.5)) + coord_equal() + coord_fixed(ratio = 1, xlim=c(725000, 825000), ylim=c(2000000, 2100000), expand = FALSE) + ylab("Northing") + xlab("Easting")
+
+WM.map <- ggplot() + study.reg.map + WM.points + ggtitle("(b) Stone masonry") + theme_classic() + theme(plot.title = element_text(hjust = 0.5)) + coord_equal() + coord_fixed(ratio = 1, xlim=c(725000, 825000), ylim=c(2000000, 2100000), expand = FALSE) + ylab("") + xlab("Easting")
+```
+
+```{r, echo = FALSE, message = FALSE, fig.align = "center", fig.cap = "Spatial distribution of buildings from the two categories and their observed central damage factors (CDFs)."}
+
+grid_arrange_shared_legend(UBW.map, WM.map, ncol = 2, position = "bottom")
+
+```
+
+```{r, echo = FALSE, message = FALSE, fig.align = "center", fig.cap = "Map of the mean peak ground acceleration (PGA) modelled for the Haiti 2010 earthquake event."}
+PGA.df <- as.data.frame(rasterToPoints(mean.PGA.raster))
+colnames(PGA.df) <- c("x", "y", "PGA")     
+
+PGA.map <- ggplot(data = PGA.df, aes(x=x, y=y)) + geom_raster(aes(fill = PGA)) + study.reg.map  + scale_fill_viridis_c()  + coord_equal() + labs(x = "Easting", y = "Northing", fill = "PGA") + coord_fixed(ratio = 1, xlim=c(725000, 825000), ylim=c(2000000, 2100000), expand = FALSE) + theme_classic()
+PGA.map
+```
+
+Figure 4 shows the spatial distribution of the buildings in the 2010 Haiti earthquake damage data which correspond to Building Category 1 (Unreinforced block walls) and Building Category 2 (Stone masonry). Figure 5 shows the modelled, mean PGA experienced during the event. We see that the PGA is highest nearer the fault and building damage for both building types seem to be greater towards this direction too. This ties in with the positive $\beta$ estimates obtained via the non-spatial ordinal models in the previous section. Since there seems to be more yellow points in Figure 4(a) than Figure 4(b), it seems that Building Category 1 is more susceptible to damage than Building Category 2. This is somewhat consistent with the larger $\beta$ estimate obtained for the former. We also notice that Building Category 2 (Stone masonry) has more damaged buildings in the lower part of the study region (near Northing 2025000) than Building Category 1 (Unreinforced block walls). This could allude to different amounts of random error or spatial pattern/correlation in the damage to the different building categories. By fitting a joint spatial model with common and building category specific spatial fields, we attempt to separate the spatial correlation in damage that is common to both categories through that in PGA and that which is unique to the categories. 
+
+The spatial correlation ranges which we can identify are dependent on the spatial resolution of our data. Previously we saw that the mean PGA raster had a resolution of about 1km by 1km. Next, we examine the distances between the buildings in our dataset:
+
+```{r}
+data.subset <- rbind(data.subset.1, data.subset.2)
+
+dist.mat <-as.matrix(stats::dist(data.subset[, c('Easting', 'Northing')], 
+                                 method = "euclidean", diag = TRUE))
+dist.mat <- dist.mat/1000 # Work in km instead of m.
+dist.mat.1 <-as.matrix(stats::dist(data.subset.1[, c('Easting', 'Northing')], 
+                                   method = "euclidean", diag = TRUE))
+dist.mat.2 <-as.matrix(stats::dist(data.subset.2[, c('Easting', 'Northing')], 
+                                   method = "euclidean", diag = TRUE))
+dist.mat.1 <- dist.mat.1/1000 # Work in km instead of m.
+dist.mat.2 <- dist.mat.2/1000 # Work in km instead of m.
+```
+
+```{r, echo = FALSE, message = FALSE, fig.height = 3, fig.width = 9, fig.align = "center", fig.cap = "Histograms of pair-wise distances between observations: (a) from the combined dataset; (b) Building Category 1; and (c) Building Category 2."}
+
+# Plot histogram of distances:
+dist_vec <- as.vector(dist.mat)[as.vector(dist.mat)>0]
+dist_vec_1 <- as.vector(dist.mat.1)[as.vector(dist.mat.1)>0]
+dist_vec_2 <- as.vector(dist.mat.2)[as.vector(dist.mat.2)>0]
+
+hist1 <- ggplot(data = data.frame(Distance = dist_vec), aes(Distance)) + geom_histogram() + ggtitle("(a) Combined") + theme_classic() + theme(plot.title = element_text(hjust = 0.5))
+hist2 <- ggplot(data = data.frame(Distance = dist_vec_1), aes(Distance)) + geom_histogram() + ggtitle("(b) Unreinforced block walls") + theme_classic() + theme(plot.title = element_text(hjust = 0.5))
+hist3 <- ggplot(data = data.frame(Distance = dist_vec_2), aes(Distance)) + geom_histogram() + ggtitle("(c) Stone masonry") + theme_classic() + theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(hist1, hist2, hist3, ncol = 3)
+```
+
+```{r, echo = FALSE} 
+cat(paste("The minimum inter-site distance is", signif(min(dist_vec), 3), "km, while that for Building Category 1 \n and 2 are", signif(min(dist_vec_1), 3), "and", signif(min(dist_vec_2), 3), "km respectively."))
+```
+
+Since the minimum inter-site distance in our dataset is 0.000221 km or 22.1cm and the maximum inter-site distance is about 100km, we should not expect to estimate building category specific spatial correlation ranges of less than 22.1cm and more than 100km. Due to the mean PGA raster resolution, the shared spatial field correlation range should also be more than 1km. In fact, literature suggests that this can range from 5km to 150km, depending on study site.
+
+Next, we set up the starting parameter values as well as parameter bounds for the optimisation. These also informed by the non-spatial ordinal model fit. Readers are advised to refer to the spatial ordinal model formula in the main paper for more information on the model parameters.
+
+```{r} 
+lower_lim <- rep(-Inf, 23); upper_lim <- rep(Inf, 23);
+
+starting.range <- 40 # Based on references, PGA spatial correlation range should be about 5-150km. Limit range.
+starting.range.2 <- 2
+starting.log.phi <- log(starting.range/sqrt(8))
+starting.log.phi.2 <- log(starting.range.2/sqrt(8))
+log_phi_max <- starting.log.phi; log_phi_min <- starting.log.phi.2;
+
+log_slope1_max <- log(1.4*frag.model.1$coefficients);
+log_slope1_min <- log(0.6*frag.model.1$coefficients)
+log_slope2_max <- log(1.4*frag.model.2$coefficients);
+log_slope2_min <- log(0.6*frag.model.2$coefficients)
+
+cutoff.1.start <- frag.model.1$zeta
+cutoff.2.start <- frag.model.2$zeta
+
+# Reparameterising cut-offs to ensure increasing order in optimisation:
+first_cutoff1 <-  cutoff.1.start[1]
+first_cutoff2 <-  cutoff.2.start[1]
+
+cutoff_factors <- function(cutoffs){
+  temp <- rep(NA, length(cutoffs)-1)
+  for (i in 2:length(cutoffs)){
+    temp[i-1] <- cutoffs[i]-cutoffs[i-1]
+  }
+  return(temp)
+}
+
+cutoff_factors1 <- cutoff_factors(cutoff.1.start)
+cutoff_factors2 <- cutoff_factors(cutoff.2.start)
+
+cutoff11_max <- 1.25*first_cutoff1; cutoff11_min <- 0.75*first_cutoff1
+cutoff21_max <- 1.25*first_cutoff2; cutoff21_min <- 0.75*first_cutoff2
+
+factor_max <- 2*max(c(cutoff_factors1, cutoff_factors2));
+factor_min <- 0.25*min(c(cutoff_factors1, cutoff_factors2))
+
+lower_lim[1] <- log_phi_min;
+
+lower_lim[10] <- log_slope1_min; lower_lim[11] <- log_slope2_min;
+
+lower_lim[12:17] <- c(cutoff11_min, rep(factor_min, length(cutoff_factors1)));
+lower_lim[18:23] <- c(cutoff21_min, rep(factor_min, length(cutoff_factors2)));
+
+upper_lim[c(1, 4, 7)] <- log_phi_max;
+
+upper_lim[10] <- log_slope1_max;  upper_lim[11] <- log_slope2_max;
+upper_lim[12:17] <- c(cutoff11_max, rep(factor_max, length(cutoff_factors1)));
+upper_lim[18:23] <- c(cutoff21_max, rep(factor_max, length(cutoff_factors2)));
+upper_lim[3] <- -2;
+```
+
+We will use the `spatial_ordinal` function to fit the spatial ordinal model.
+
+```{r}
+
+?spatial_ordinal
+
+```
+
+The spatial ordinal model takes about 4 hours to fit on a PC with characteristics Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz; 32.0 GB installed memory (RAM); Windows 10 64-bit. 
+ 
+```{r, eval = FALSE} 
+
+temp.time <- proc.time()[3]
+spatial_fit <- spatial_ordinal(frag.model.1, frag.model.2, data.subset.1, data.subset.2,
+                               start = NULL, lower.lim = lower_lim, upper.lim = upper_lim)
+time.taken <- proc.time()[3] - temp.time
+time.taken/(60*60)
+
+```
+
+
+These are the parameter estimates. 
+
+```{r, include = FALSE} 
+
+# save(spatial_fit, file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_spatial_fit_2.RData")
+
+load(file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_spatial_fit_2.RData")
+# spatial_fit.
+
+```
+
+```{r} 
+
+spatial_fit$par
+
+```
+
+Next, we visualise the fitted variograms as well as estimated spatial fields in the capital of Haiti, Port-au-Prince, using the `vgm_plot`, `kriged_fields` and `latent_var` functions. 
+
+```{r}
+
+?vgm_plot
+?kriged_fields
+?latent_var
+
+```
+
+```{r, fig.height = 9, fig.width = 9, fig.align = "center", fig.cap = "Fitted variograms of the spatial ordinal model for: (a) the shared spatial field; (b) Building Category 1 specific spatial field; and (c) Building Category 2 specific spatial field."} 
+
+shared_range <- seq(0, 25, by = 0.2); cat_range <- seq(0, 2.5, by = 0.02)
+vgm_plot(spatial_fit$par, shared_range, cat_range)
+
+```
+
+```{r, include = FALSE}
+if(plot_output){
+  
+jpeg("D:/Documents/Proj_Damage_Spatial_Corr/Graphics/fig3.jpg", width = 8, height = 8, units = "in", res = 300)
+
+vgm_plot(spatial_fit$par, shared_range, cat_range)
+
+dev.off()
+
+}
+
+```
+
+From Figure 7, we estimate a spatial range for the shared spatial field of about 15 km, while those specific to Building category 1 and 2 are found to be about 2km. The effect of these are shown in the estimated spatial fields in Figures 8(b)-(c) and 9(b)-(c).  
+
+```{r, warning = FALSE, message = FALSE} 
+
+# Convert the cut-off factors to cut-off values on the latent variable scale:
+new_par <- convert_cutoffs(spatial_fit$par)
+
+# Obtain the shapefile for Port-au-Prince:
+data("haiti_admin2")
+
+pap_shp <- haiti_admin2[haiti_admin2$ADM2_EN == "Port-au-Prince", ]
+pap_shp <- spTransform(pap_shp, CRS("+proj=utm +zone=18 ellps=WGS84"))
+
+# Krige the field estimates from the spatial ordinal model fit:
+kriged_rasters <- kriged_fields(spatial_fit, data.subset.1, data.subset.2, 
+                                pap_shp, mean.PGA.raster)
+
+```
+
+```{r, message = FALSE, warning = FALSE, fig.height = 4, fig.width = 12, fig.align = "center", fig.cap = "Contributing terms of Building category 1's latent variable mean surface."}
+
+# Compute the latent variable mean raster for a building category and plot its contributing terms.
+
+latent_var_1 <- latent_var(category = 1, new_par, kriged_rasters, mean.PGA.raster, study_shp)
+  
+```
+
+```{r, include = FALSE}
+
+if(plot_output){
+  
+jpeg("D:/Documents/Proj_Damage_Spatial_Corr/Graphics/fig4.jpg", width = 10.5, height = 3.5, units = "in", res = 300)
+
+latent_var_1 <- latent_var(category = 1, new_par, kriged_rasters, mean.PGA.raster, study_shp)
+
+dev.off()
+
+}
+
+```
+
+
+```{r, message = FALSE, warning = FALSE, fig.height = 4, fig.width = 12, fig.align = "center", fig.cap = "Contributing terms of Building category 2's latent variable mean surface."}
+
+# Compute the latent variable mean raster for a building category and plot its contributing terms.
+
+  latent_var_2 <- latent_var(category = 2, new_par, kriged_rasters, mean.PGA.raster, study_shp)
+
+```
+
+```{r, include = FALSE}
+
+if(plot_output){
+  
+jpeg("D:/Documents/Proj_Damage_Spatial_Corr/Graphics/fig5.jpg", width = 10.5, height = 3.5, units = "in", res = 300)
+
+latent_var_2 <- latent_var(category = 2, new_par, kriged_rasters, mean.PGA.raster, study_shp)
+
+dev.off()
+
+}
+
+```
+
+From Figures 8 and 9, we also see that the $\beta log(PGA)$ component is the larger of the three components that are added up to form the latent variable means for the two building categories. But as we will show later, the spatial intricacies that are modelled via spatial fields can have noticeable effects on the estimated damage probabilities and loss estimation.
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.height = 6, fig.width = 12, fig.align = "center", fig.cap = "Illustrative plots of how the spatial fields shift the ordinal distributions for Building category 1."}
+
+# Compare buildings at two locations:
+loc.df <- data.frame("Easting" = c(781000, 782000), "Northing"  = c(2051000, 2051000), "Location"  = c("Site 1", "Site 2"))
+
+lv1.df <- as.data.frame(rasterToPoints(latent_var_1))
+colnames(lv1.df) <- c("x", "y", "latent.var")
+
+field1.df <- as.data.frame(rasterToPoints(kriged_rasters$field1_ras))
+colnames(field1.df) <- c("x", "y", "latent.var")
+
+pga.spatial.df <- lv1.df - field1.df
+# Check that coordinates match up:
+# sum(pga.spatial.df$x!=0) + sum(pga.spatial.df$y!=0) == 0
+
+pga.spatial.df$x <- lv1.df$x; pga.spatial.df$y <- lv1.df$y; 
+
+raster.extent <- latent_var_1@extent
+study.shp_crop <- crop(study_shp, raster.extent)
+study.reg.map <- geom_polygon(data = study.shp_crop, aes(x = long, y = lat, group = group), colour = "black", fill = NA)
+
+lv1.map <- ggplot() + geom_raster(data = lv1.df, aes(x=x, y=y, fill = latent.var)) + scale_fill_viridis_c()  + coord_equal() + labs(x = "Easting", y = "Northing", fill = " Latent variable\n mean")
+map.1 <- lv1.map + study.reg.map + ggtitle(expression(paste("(a) Building category 1"))) + theme_classic() + theme(plot.title = element_text(hjust = 0.5), legend.position = "bottom") + geom_point(data = loc.df, aes(x=Easting, y=Northing), colour = "white", size = 1.5, shape = 18) + geom_text(data = loc.df, aes(x=Easting, y=Northing, label = Location), nudge_y = c(1750, 0), nudge_x = c(1500, 3500), colour = "white", size = 3.5)
+
+pga.spat.map <- ggplot() + geom_raster(data = pga.spatial.df, aes(x=x, y=y, fill = latent.var)) + scale_fill_viridis_c()  + coord_equal() + labs(x = "Easting", y = "Northing", fill = " Latent variable\n mean")
+map.2 <- pga.spat.map  + study.reg.map + ggtitle(expression(paste("(b) With shared field only"))) + theme_classic() + theme(plot.title = element_text(hjust = 0.5), legend.position = "bottom") + geom_point(data = loc.df, aes(x=Easting, y=Northing), colour = "white", size = 1.5, shape = 18) + geom_text(data = loc.df, aes(x=Easting, y=Northing, label = Location), nudge_y = c(1750, -0), nudge_x = c(1500, 3500), colour = "white", size = 3.5)
+
+# Compute the ordinal distributions at these two locations:
+# Extract the mean of the distributions (latent variable values):
+distr_means <- raster::extract(latent_var_1, loc.df[, c("Easting", "Northing")])
+
+den.site1 <- dnorm(latent.val.range, mean = distr_means[1], sd = sqrt(exp(new_par["log_tau1_2"])))
+distr.df1 <- data.frame("x" = latent.val.range, "y" = den.site1)
+
+den.site2 <- dnorm(latent.val.range, mean = distr_means[2], sd = sqrt(exp(new_par["log_tau1_2"])))
+distr.df2 <- data.frame("x" = latent.val.range, "y" = den.site2)
+
+combined.df <- rbind(distr.df1, distr.df2)
+combined.df$Location <- rep(c("Site 1", "Site 2"), each = nrow(distr.df1))
+
+label.df <- data.frame("x" = c(new_par[names(new_par) == "cutoffs1"][1] - 0.25, new_par[names(new_par) == "cutoffs1"][-(length(CDF_breaks)-1)] + diff(new_par[names(new_par) == "cutoffs1"])*0.5, tail(new_par[names(new_par) == "cutoffs1"], 1) + 0.25), "y" = rep(1.15*max(den.site1), length(CDF_breaks)), "label" = paste("State", seq(1, length(CDF_breaks), by = 1)))
+
+plot.0 <- ggplot(data = combined.df, aes(x = x, y = y)) + ylim(c(0, 1.2*max(den.site1))) + geom_line(aes(colour = Location)) + geom_vline(xintercept = new_par[names(new_par) == "cutoffs1"]) + labs(x = "Latent variable", y = "") + theme_classic()
+
+
+plot.1 <- plot.0 + geom_text(data = label.df, aes(x = x, y = y, label = label)) + theme(plot.title = element_text(hjust = 0.5), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                                                                                        panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.position = "bottom") + ggtitle(expression(paste("(c) Probability density"))) +
+  xlim(c(0, 2))
+
+top.plots <- grid_arrange_shared_legend(map.1, map.2, ncol = 1, nrow = 2, position = "bottom", plot = FALSE)
+
+
+grid.arrange(top.plots, plot.1, ncol = 4, nrow = 2, layout_matrix = matrix(c(1, 1, 2, 2, 2, 2, 2, 2), nrow = 2, ncol = 4))
+
+```
+
+```{r, include = FALSE}
+
+if(plot_output){
+  
+jpeg("D:/Documents/Proj_Damage_Spatial_Corr/Graphics/fig2.jpg", width = 12, height = 6, units = "in", res = 300)
+
+  grid.arrange(top.plots, plot.1, ncol = 4, nrow = 2, layout_matrix = matrix(c(1, 1, 2, 2, 2, 2, 2, 2), nrow = 2, ncol = 4))
+  
+dev.off()
+
+}
+
+```
+
+In Figure 10(a), we chose two locations (Site 1 and 2) to illustrate the effect of the Building category 1 specific spatial field on its ordinal probability distributions. Nearer Site 1, higher latent variable mean values lead to a shift in the probability density to the right. This in turn leads to higher exceedance probabilities for higher damage states. The converse holds for locations near Site 2. This can also be seen in the maps of exceedance probabilities in Figure 11. 
+
+```{r, message = FALSE, warning = FALSE, fig.height = 4, fig.width = 12, fig.align = "center", fig.cap = "Maps of the exceedance probabilities for different damage states (Building category 1)."}
+exceed_prob_1 <- prob_exceed(1, new_par, CDF_breaks, latent_var_1, study_shp)
+
+```
+
+For completeness, we also show the maps of exceedance probabilities for Building category 2 in Figure 12. These are computed during the `prob_exceed` function in the R package.
+
+```{r, message = FALSE, warning = FALSE, fig.height = 4, fig.width = 12, fig.align = "center", fig.cap = "Maps of the exceedance probabilities for different damage states (Building category 2)."}
+exceed_prob_2 <- prob_exceed(2, new_par, CDF_breaks, latent_var_2, study_shp)
+
+```
+
+The spatial patterns in the latent variable mean surface translate to similar patterns in the exceedance probability maps. 
+
+Next, we will use one million one-year stochastic event set (SES) simulations from the OpenQuake engine as well as a portfolio of 150 buildings of each building type within a 2km x 2km grid to illustrate the effect of modelling spatial correlation in damage. 
+
+## Computing annual loss curves using OpenQuake and spatial field simulations
+
+OpenQuake enables us to obtain rasters of simulated PGA over our study region. By extracting the simulated PGA for our buildings in Port-au-Prince per event, we obtain the following dataframe: 
+
+```{r}
+
+# Skip chunks until later when we use subset_data directly.
+load(file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/logPGA_df_OQ.RData") 
+# logPGA_df. 
+
+head(logPGA_df[, 1:10])
+events_affected <- sum(!(colnames(logPGA_df) %in% c("lon", "lat", "building_cat"))) 
+# 156491.
+
+```
+
+Each row denotes a building with its corresponding longitude and latitude coordinates as well as category (`building_cat = 1` or `2`). The numbered columns correspond to the $\log(PGA)$ values for the simulated events which are identified by their `event_id`. Note that we only record events which affect at least one building of our concern. Hence, the `event_id`s are not consecutive. The `NA` values occur as a result of the location being outside the range of the calculation from the earthquake source. For our simulations, we set this distance to be 200km. Later, we will replace these `NA` values with `-Inf`. 
+
+In addition to the PGA per building per event, we need to associate events with the year of occurrence or SES. The dataframe `master.events` contains this information:
+
+```{r}
+
+# For matching events with SES:
+load(file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/master.events_OQ.RData")
+# master.events.
+
+head(master.events)
+ses_list <- unique(master.events$rlz_id)
+
+```
+
+Note it is likely that the `ses_id` will be available in the `events` file given by an updated version of OpenQuake. However, for now, we use `rlz_id` in place of this because it is equivalent when we set `ses_per_logic_tree_path = 1` for multiple logic tree samples in the OpenQuake `job.ini` file.
+
+Next, we select a portfolio of 150 buildings of each building type within a 2km x 2km grid:
+
+```{r}
+pap.pts <- SpatialPoints(logPGA_df[, c("lon", "lat")], proj4string = crs(pap_shp))
+
+# 2km x 2km:
+study_area <- Polygon(rbind(c(-72.34, 18.535), c(-72.34, 18.555), 
+                            c(-72.32, 18.555), c(-72.32, 18.535)))
+study_area <- Polygons(list(study_area),1)
+study_area <- SpatialPolygons(list(study_area))
+crs(study_area) <- crs(pap.pts)
+
+# Keep points in area only:
+study_ind <- over(pap.pts, study_area)
+
+study_data <- logPGA_df[!is.na(study_ind), ]
+
+set.seed(1)
+subset_data <- study_data  %>% group_by(building_cat) %>% sample_n(150)
+
+```
+
+```{r}
+
+# Change coordinates to easting and northing:
+obs.pts <- SpatialPoints(subset_data[, c("lon", "lat")], 
+                         proj4string = CRS("+proj=longlat"))
+
+UTM.pts <- spTransform(obs.pts, CRS("+proj=utm +zone=18 ellps=WGS84"))
+colnames(UTM.pts@coords) <- c("Easting", "Northing")
+UTM.pts@coords <- UTM.pts@coords/1000 # Parameters relate to km for distance not m.
+```
+
+We convert the coordinates to Easting and Northing to simulate the spatial fields required to compute the latent variable means. For Building category $i = 1, 2$, the latent variable values for the three models are defined as follows:
+
+$$
+\mathbf{Z}^{(i)} = \begin{cases} [\beta_{i} (\log(IM) + \mathbf{u}^{S} + \mathbf{e}^{S}) + \mathbf{u}^{i} + \mathbf{e}^{D,i}] + \mathbf{e}^{(i)} & \text{[Damage-spatial]} \\
+[\beta_{i} (\log(IM) + \mathbf{u}^{S} + \mathbf{e}^{S})] + \tilde{\mathbf{e}}^{(i)} & \text{[IM-spatial]} \\
+[\beta_{i} (\log(IM) + \tilde{\mathbf{e}}^{S})] + \tilde{\mathbf{e}}^{(i)} & \text{[Non-spatial]} 
+\end{cases}
+$$
+where $\beta_{i}$ is the associated slope coefficient, $\log(IM)$ is the log-transformed PGA value, $\mathbf{u}^{S}$ is the shared spatial field with a \latexcode{Mat\'{e}rn} covariance and $\mathbf{e}^{S}$ is its dummy nugget component. Here, $\mathbf{u}^{i}$ is the building category specific field with a different \latexcode{Mat\'{e}rn} covariance and $\mathbf{e}^{(i)}$ is its nugget or random error component while $\mathbf{e}^{D,i}$ is its dummy nugget component for kriging. Comparing the Damage-spatial case to the Non-spatial case, we see that the former decomposes the random error terms $\tilde{\mathbf{e}}^{S}\sim N(0, (\tau^2+\sigma^2)I$ and  $\tilde{\mathbf{e}}^{(i)}\sim N(0, (\tau^2 + \tau_{i}^2+\sigma_{i}^2)I)$ into $\mathbf{u}^{S} + \mathbf{e}^{S}$ and $\mathbf{u}^{(i)} + \mathbf{e}^{D,i} + \mathbf{e}^{(i)}$ respectively. The parameters $\tau^2$ and $\tau_{i}^2$ refer to the estimated nugget variances from the spatial ordinal model while $\sigma^2$ and $\sigma_{i}^2$ denote the partial sills. We have used $I$ to represent the identity matrix. 
+
+To compute the exceedance probabilities and mean replacement cost (the product of the replacement cost and mean central damage factor), we simulate the latent variable means, $\mu_{LV}$, denoted in the square brackets and compute the exceedance probability of damage state $k$ by $1 - \Phi\left(\frac{\xi_{k} - \mu_{LV}}{\tau_i}\right)$ for the Damage-spatial case and $1 - \Phi\left(\frac{\xi_{k} - \mu_{LV}}{\sqrt{\tau_{i}^{2} + \sigma_{i}^{2}}}\right)$ for the IM-spatial and Non-spatial cases.
+
+The shared and building category specific fields are simulated once for each of the 156491 events which affect Port-au-Prince: 
+
+```{r}
+# Spatial model parameters:
+field.phi <- exp(new_par["log_phi"]); field.sigma2 <- exp(new_par["log_sigma_2"]); 
+field.tau2 <- exp(new_par["log_tau_2"]);
+field1.phi <- exp(new_par["log_phi1"]); field1.sigma2 <- exp(new_par["log_sigma1_2"]); 
+field1.tau2 <- exp(new_par["log_tau1_2"]);
+field2.phi <- exp(new_par["log_phi2"]); field2.sigma2 <- exp(new_par["log_sigma2_2"]); 
+field2.tau2 <- exp(new_par["log_tau2_2"]);
+beta1 <- exp(new_par["log_slope1"]); beta2 <- exp(new_par["log_slope2"]);
+```
+
+```{r, eval = FALSE}
+
+# a. Shared field:
+
+# Define the gstat object (spatial model)
+g.dummy <- gstat::gstat(formula=z~1, locations=~Easting+Northing, dummy=T, beta=0,
+                        model=vgm(psill=field.sigma2,range=field.phi,nugget=field.tau2,
+                                  kappa=1,model="Mat"))
+
+# Make simulations based on the stat object
+set.seed(2)
+temp.time <- proc.time()[3]
+field.sim <- predict(g.dummy, newdata=UTM.pts, nsim=events_affected)
+time.taken.2 <- proc.time()[3] - temp.time
+
+# b. Field for Building Cat 1:
+
+# Define the gstat object (spatial model)
+g.dummy1 <- gstat(formula=z~1, locations=~Easting+Northing, dummy=T, beta=0,
+                  model=vgm(psill=field1.sigma2,range=field1.phi,nugget=field.tau2,
+                            kappa=1,model="Mat"))
+
+set.seed(3)
+temp.time <- proc.time()[3]
+field1.sim <- predict(g.dummy1, newdata=UTM.pts[subset_data$building_cat == 1, ],
+                      nsim=events_affected)
+time.taken.3 <- proc.time()[3] - temp.time
+
+# c. Field for Building Cat 2:
+
+# Define the gstat object (spatial model)
+g.dummy2 <- gstat(formula=z~1, locations=~Easting+Northing, dummy=T, beta=0,
+                  model=vgm(psill=field2.sigma2,range=field2.phi,nugget=field.tau2,
+                            kappa=1,model="Mat"))
+
+set.seed(4)
+temp.time <- proc.time()[3]
+field2.sim <- predict(g.dummy2, newdata=UTM.pts[subset_data$building_cat == 2, ],
+                      nsim=events_affected)
+time.taken.4 <- proc.time()[3] - temp.time
+
+```
+
+```{r, include = FALSE}
+
+# save(field.sim, field1.sim, field2.sim, file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_field_sim_2.RData")
+
+load(file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_field_sim_2.RData")
+# field.sim, field1.sim, field2.sim.
+```
+
+```{r}
+head(field.sim[, 1:10])
+```
+
+The simulation of the shared field (`field.sim`) takes about 53 minutes while the simulation of the building category specific fields (`field1.sim` and `field2.sim`) take about 16 min each. Note that we do not include the nugget for the latter two because from the equation because they do not contribute to the latent variable means. As illustrated for `field.sim` above, the columns of the storage dataframes corresponding to the simulation numbers while the rows correspond to the individual buildings which are ordered according to their order in the `subset_data` dataframe. 
+
+With the estimated fields, we can compute the latent variable means corresponding to the spatial ordinal model for damage correlation as well as its submodels: the non-spatial model and the spatial model considering only the shared field, i.e. only spatial correlation due to $\log(PGA)$. To differentiate between these models, we will refer to them as the "Non-spatial", the "IM-spatial" and the "Damage-spatial" models. The `lv_sim` function compute the latent variable means for the different models:
+
+```{r, eval = FALSE}
+
+temp.time <- proc.time()[3]
+nonspat_lv <- lv_sim(model = "Non-spatial", data = subset_data, fieldsim = NULL,
+                     field1sim = NULL, field2sim = NULL, slope1 = beta1, slope2 = beta2,
+                     shared_sill = field.tau2 + field.sigma2)
+time.taken.5 <- proc.time()[3] - temp.time
+
+temp.time <- proc.time()[3]
+pgaspat_lv <- lv_sim(model = "IM-spatial", data = subset_data, fieldsim = field.sim,
+                     field1sim = NULL, field2sim = NULL, slope1 = beta1, slope2 = beta2,
+                     shared_sill = field.tau2 + field.sigma2)
+time.taken.6 <- proc.time()[3] - temp.time
+
+temp.time <- proc.time()[3]
+damagespat_lv <- lv_sim(model = "Damage-spatial", data = subset_data, fieldsim = field.sim,
+                        field1sim = field1.sim, field2sim = field2.sim, slope1 = beta1,
+                        slope2 = beta2, shared_sill = field.tau2 + field.sigma2)
+time.taken.7 <- proc.time()[3] - temp.time
+
+```
+
+Based on the simulated latent variable means, we compute the annual losses by defining a replacement cost per building (here we use 1 unit cost) and computing the mean damage factor for each building as the weighted mean of the central damage factors where the weights are the estimated probabilities of being in each damage state. Then, by multiplying the replacement cost with the mean damage factor and summing this up over all the buildings affected and event in the year, we obtain the estimated annual loss. First, we compute the mean replacement cost of our building portfolios per event for the two building types separately:
+
+```{r, eval = FALSE}
+
+# Cutoff values:
+cutoffs1 <- new_par[names(new_par) == "cutoffs1"];
+cutoffs2 <- new_par[names(new_par) == "cutoffs2"];
+
+temp.time <- proc.time()[3]
+nonspat.rc1 <- portfolio_rc(cutoffs1, CDF_breaks, nonspat_lv$lv1,
+                            sqrt(field.tau2 + field1.tau2 + field1.sigma2), 
+                            replacement.cost = 1)
+time.taken.8 <- proc.time()[3] - temp.time
+
+temp.time <- proc.time()[3]
+pgaspat.rc1 <- portfolio_rc(cutoffs1, CDF_breaks, pgaspat_lv$lv1,
+                            sqrt(field.tau2 + field1.tau2 + field1.sigma2), 
+                            replacement.cost = 1)
+time.taken.9 <- proc.time()[3] - temp.time
+
+temp.time <- proc.time()[3]
+damagespat.rc1 <- portfolio_rc(cutoffs1, CDF_breaks, damagespat_lv$lv1,
+                               sqrt(field1.tau2), replacement.cost = 1)
+time.taken.10 <- proc.time()[3] - temp.time
+
+temp.time <- proc.time()[3]
+nonspat.rc2 <- portfolio_rc(cutoffs2, CDF_breaks, nonspat_lv$lv2,
+                            sqrt(field.tau2 + field2.tau2 + field2.sigma2), 
+                            replacement.cost = 1)
+time.taken.11 <- proc.time()[3] - temp.time
+
+temp.time <- proc.time()[3]
+pgaspat.rc2 <- portfolio_rc(cutoffs2, CDF_breaks, pgaspat_lv$lv2,
+                            sqrt(field.tau2 + field2.tau2 + field2.sigma2), 
+                            replacement.cost = 1)
+time.taken.12 <- proc.time()[3] - temp.time
+
+temp.time <- proc.time()[3]
+damagespat.rc2 <- portfolio_rc(cutoffs2, CDF_breaks, damagespat_lv$lv2,
+                               sqrt(field2.tau2), replacement.cost = 1)
+time.taken.13 <- proc.time()[3] - temp.time
+```
+
+If we have exposure data aggregated up into grids, we can calculate the latent variable means per grid cell and use the `no.building` argument in `portfolio_rc` function to indicate the number of buildings per grid location so that we can multiply this with the estimated replacement costs per grid cell. Summing this up over all the grid cells gives us the estimated portfolio loss. Next, we match the loss per event to the SES to calculate annual losses:
+
+```{r}
+# Compute annual losses and exceedance rates:
+
+event_list <- colnames(subset_data)[!(colnames(subset_data) %in% c("loc_id", "lon", "lat",
+                                                                   "building_cat"))]
+
+```
+                                                                                                               
+```{r, eval = FALSE}
+
+nonspat.al1 <- nonspat.al2 <- pgaspat.al1 <- pgaspat.al2 <-
+damagespat.al1 <- damagespat.al2 <- rep(0, length(ses_list))
+
+temp.time <- proc.time()[3]
+for (i in 1:length(event_list)){
+  ses_event <- master.events$rlz_id[master.events$event_id == as.numeric(event_list[i])]
+  nonspat.al1[ses_list == ses_event] <-  nonspat.al1[ses_list == ses_event] +
+                                         nonspat.rc1[i]
+  nonspat.al2[ses_list == ses_event] <-  nonspat.al2[ses_list == ses_event] +
+                                         nonspat.rc2[i]
+  pgaspat.al1[ses_list == ses_event] <-  pgaspat.al1[ses_list == ses_event] +
+                                         pgaspat.rc1[i]
+  pgaspat.al2[ses_list == ses_event] <-  pgaspat.al2[ses_list == ses_event] +
+                                         pgaspat.rc2[i]
+  damagespat.al1[ses_list == ses_event] <-  damagespat.al1[ses_list == ses_event] + 
+                                            damagespat.rc1[i]
+  damagespat.al2[ses_list == ses_event] <-  damagespat.al2[ses_list == ses_event] +       
+                                            damagespat.rc2[i]
+
+  if ((i %% 1000)==0) { # reduce logging
+    print(paste(i, "/", length(event_list), " done.", sep = ""))
+  }
+}
+time.taken.14 <- proc.time()[3] - temp.time
+
+```
+
+```{r}
+
+#save(nonspat.al1, nonspat.al2, pgaspat.al1, pgaspat.al2,
+#damagespat.al1, damagespat.al2, file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_al_sim_2.RData")
+
+load(file = "D:/Documents/Proj_Damage_Spatial_Corr/Data/demo_al_sim_2.RData")
+
+```
+
+This operation takes about 20 minutes. As a check, we compute the average annual loss and associated standard deviation for each model. The results for building category 1 and 2 are given in Table 1 and 2 respectively.
+
+```{r, echo = FALSE}
+
+al.stats <- data.frame("Model" = c("Non-spatial", "IM-spatial", "Damage-spatial"), 
+                       "AAL" = round(c(mean(nonspat.al1), mean(pgaspat.al1), mean(damagespat.al1)), 2), 
+                       "sd" = round(c(sd(nonspat.al1), sd(pgaspat.al1), sd(damagespat.al1)), 2))
+
+knitr::kable(al.stats, caption = "Building category 1: Average annual losses (AAL) and associated standard deviations (sd) for the spatial ordinal model (Damage-spatial) and its submodels (Non-spatial, IM-spatial).")
+
+```
+
+```{r, echo = FALSE}
+
+al.stats.2 <- data.frame("Model" = c("Non-spatial", "IM-spatial", "Damage-spatial"),
+                       "AAL" = round(c(mean(nonspat.al2), mean(pgaspat.al2), mean(damagespat.al2)), 2),
+                       "sd" = round(c(sd(nonspat.al2), sd(pgaspat.al2), sd(damagespat.al2)), 2))
+
+knitr::kable(al.stats.2, caption = "Building category 2: Average annual losses (AAL) and associated standard deviations (sd) for the spatial ordinal model (Damage-spatial) and its submodels (Non-spatial, IM-spatial).")
+
+```
+
+The models should produce similar average annual losses so that adding the spatial fields do not introduce bias. Similar to what was noted on p.20 of Silva (2019), "Uncertainty and Correlation in Seismic Vulnerability Functions of Building Classes", we also observe larger standard deviations associated with higher spatial correlation. 
+
+Based on the annual losses per SES year, we plot the rates of exceedance as shown in Figure 13 for the building categories separately and Figure 14 for the combined portfolio of building category 1 and 2.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 4, fig.width = 8, fig.align = "center", fig.cap = "Loss exceedance curves for the portfolios of (a) 150 Category 1 (unreinforced block walls) and (b) 150 Category 2 (stone masonry) buildings within a 2km by 2km region in Port-au-Prince."}
+
+# To plot:
+al_vec <- c(10^seq(-20, 0, by = 1), seq(1.1, 200, by = 0.1)) # Aggregated loss (x-axis).
+nonspat.ar <- nonspat.ar_ex1 <- nonspat.ar_ex2 <- pgaspat.ar <- pgaspat.ar_ex1 <- pgaspat.ar_ex2 <- damagespat.ar <- damagespat.ar_ex1 <- damagespat.ar_ex2 <- nonspat_nonsubmodel.ar <- nonspat_nonsubmodel.ar_ex1 <- nonspat_nonsubmodel.ar_ex2 <- rep(NA, length(al_vec)) # Annual rate of exceeding a loss level.
+no_ses <- 1000000 # 1 million OpenQuake SES simulations.
+for (i in 1:length(al_vec)){
+  nonspat.ar[i] <- sum((nonspat.al1+nonspat.al2) > al_vec[i])/no_ses
+  nonspat.ar_ex1[i] <- sum(nonspat.al1 > al_vec[i])/no_ses
+  nonspat.ar_ex2[i] <- sum(nonspat.al2 > al_vec[i])/no_ses
+  pgaspat.ar[i] <- sum((pgaspat.al1+pgaspat.al2) > al_vec[i])/no_ses
+  pgaspat.ar_ex1[i] <- sum(pgaspat.al1 > al_vec[i])/no_ses
+  pgaspat.ar_ex2[i] <- sum(pgaspat.al2 > al_vec[i])/no_ses
+  damagespat.ar[i] <- sum((damagespat.al1 + damagespat.al2) > al_vec[i])/no_ses
+  damagespat.ar_ex1[i] <- sum(damagespat.al1 > al_vec[i])/no_ses
+  damagespat.ar_ex2[i] <- sum(damagespat.al2 > al_vec[i])/no_ses
+}
+
+al_df_cat1 <- data.frame("AL" = rep(al_vec, 3), "Model" = rep(c("Non-spatial", "IM-spatial", "Damage-spatial"), each = length(al_vec)),
+                    "ARE" = c(nonspat.ar_ex1, pgaspat.ar_ex1, damagespat.ar_ex1))
+
+al_df_cat2 <- data.frame("AL" = rep(al_vec, 3), "Model" = rep(c("Non-spatial", "IM-spatial", "Damage-spatial"), each = length(al_vec)),
+                         "ARE" = c(nonspat.ar_ex2, pgaspat.ar_ex2, damagespat.ar_ex2))
+
+al_df_cat1$Model <- factor(al_df_cat1$Model, levels = c("Non-spatial", "IM-spatial", "Damage-spatial"), ordered = TRUE)
+al_df_cat2$Model <- factor(al_df_cat2$Model, levels = c("Non-spatial", "IM-spatial", "Damage-spatial"), ordered = TRUE)
+
+plot.1 <- ggplot(data = al_df_cat1, aes(x = AL, y = ARE)) + scale_y_continuous(trans='log10', limits = c(10^-4, 10^-1))   + geom_line(aes(colour = Model)) + labs(x = "Aggregated loss", y = "Annual rate of exceeedance") + theme_classic() + theme(plot.title = element_text(hjust = 0.5), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                 panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.position = "bottom") + ggtitle(expression(paste("(a) Unreinforced block walls"))) + lims(x = c(0, 150))
+
+plot.2 <- ggplot(data = al_df_cat2, aes(x = AL, y = ARE)) + scale_y_continuous(trans='log10', limits = c(10^-4, 10^-1))   + geom_line(aes(colour = Model)) + labs(x = "Aggregated loss", y = "Annual rate of exceeedance") + theme_classic() + theme(plot.title = element_text(hjust = 0.5), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                 panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.position = "bottom") + ggtitle(expression(paste("(b) Stone masonry"))) + lims(x = c(0, 150))
+
+grid_arrange_shared_legend(plot.1, plot.2, ncol = 2, nrow = 1)
+
+```
+
+```{r, include = FALSE}
+if(plot_output){
+
+  jpeg("D:/Documents/Proj_Damage_Spatial_Corr/Graphics/fig6.jpg", width = 10.5, height = 5.25, units = "in", res = 300)
+  
+grid_arrange_shared_legend(plot.1, plot.2, ncol = 2, nrow = 1)
+
+dev.off()
+}
+```
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 5, fig.width = 5, fig.align = "center", fig.cap = "Loss exceedance curves for the portfolio containing 150 Category 1 (unreinforced block walls) and 150 Category 2 (stone masonry) buildings within a 2km by 2km region in Port-au-Prince."}
+
+al_df <- data.frame("AL" = rep(al_vec, 3), "Model" = rep(c("Non-spatial", "IM-spatial", "Damage-spatial"), each = length(al_vec)),
+                         "ARE" = c(nonspat.ar, pgaspat.ar, damagespat.ar))
+
+al_df$Model <- factor(al_df$Model, levels = c("Non-spatial", "IM-spatial", "Damage-spatial"), ordered = TRUE)
+
+ggplot(data = al_df, aes(x = AL, y = ARE)) + scale_y_continuous(trans='log10', limits = c(10^-3, 10^-1))   + geom_line(aes(colour = Model)) + labs(x = "Aggregated loss", y = "Annual rate of exceeedance") + theme_classic() + theme(plot.title = element_text(hjust = 0.5), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.position = "bottom") + ggtitle(expression(paste("Combined portfolio"))) + lims(x = c(0, 150))
+
+
+```
+
+Next, we compute the Akaike Information Criterion (AIC) values for the three damage models.
+
+
+```{r}
+
+?submodel_aic
+
+```
+
+```{r, message = FALSE}
+
+temp.time <- proc.time()[3]
+aic_val <- submodel_aic(data.1 = data.subset.1, 
+                        data.2 = data.subset.2, model.fit = spatial_fit)
+time.taken.15 <- proc.time()[3] - temp.time
+
+aic.df <- data.frame("Model" = c("Non-spatial", "IM-spatial", "Damage-spatial"),
+                       "AIC" = round(aic_val, 2))
+```
+
+```{r, echo = FALSE}
+
+knitr::kable(aic.df, caption = "Akaike Information Criterion (AIC) values for the non-spatial, IM-spatial and Damage-spatial models.")
+
+```
+
+From Table 3, we see that the Damage-spatial model has a lower Akaike Information Criterion (AIC) value than the IM-spatial and Non-spatial submodels. Since it fits the Haiti damage data better, this provides evidence for spatial correlation in damage beyond that explained by PGA. 
