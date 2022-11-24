@@ -77,7 +77,7 @@
 #' #                             upper.lim = upper_lim)
 #' #time.taken <- proc.time()[3] - temp.time
 
-spatial_ordinal <- function(model.1, model.2, data.1, data.2, start = NULL, lower.lim = rep(-Inf, 23), upper.lim = rep(Inf, 23)){
+spatial_ordinal <- function(model.1, model.2, data.1, data.2, start = NULL, lower.lim, upper.lim){
 
   if(is.null(start)){
 
@@ -98,24 +98,24 @@ spatial_ordinal <- function(model.1, model.2, data.1, data.2, start = NULL, lowe
       return(temp)
     }
 
-    cutoff_factors1 <- cutoff_factors(cutoff.1.start)
-    cutoff_factors2 <- cutoff_factors(cutoff.2.start)
+    cutoff_factors1 <- as.vector(na.omit(cutoff_factors(cutoff.1.start)))
+    cutoff_factors2 <- as.vector(na.omit(cutoff_factors(cutoff.2.start)))
 
     parameters <- list(
       c_factor1 = c(first_cutoff1, cutoff_factors1),
       c_factor2 = c(first_cutoff2, cutoff_factors2),
-      log_phi = 1.6532815,
-      log_sigma_2 = -1.2313959,
-      log_tau_2 = -9.1425902,
-      log_phi1 = -1.1385036,
-      log_tau1_2 = -0.7311687,
-      log_sigma1_2 = -2.8401772,
-      log_phi2 = -0.7887266,
-      log_tau2_2 = -0.8261514,
-      log_sigma2_2 = -1.2392615,
-      field = rep(0, nrow(data.subset.1) + nrow(data.subset.2)),
-      field1 = rep(0, nrow(data.subset.1)),
-      field2 = rep(0, nrow(data.subset.2)),
+      log_phi = 1.0974059,
+      log_sigma_2 = -1.1364393,
+      log_tau_2 = -12.2628587,
+      log_phi1 = -1.5940830,
+      log_tau1_2 = -0.4557683,
+      log_sigma1_2 = -1.1763577,
+      log_phi2 = -1.4482630,
+      log_tau2_2 = -0.4466334,
+      log_sigma2_2 = -0.4345107,
+      field = rep(0, nrow(data.1) + nrow(data.2)),
+      field1 = rep(0, nrow(data.1)),
+      field2 = rep(0, nrow(data.1)),
       log_slope1 = log(slope.1.start),
       log_slope2 = log(slope.2.start)
     )
@@ -143,8 +143,10 @@ spatial_ordinal <- function(model.1, model.2, data.1, data.2, start = NULL, lowe
     damage_ind_2[, i] <- as.numeric(data.2$CDF == CDF_breaks[i])
   }
 
-  damage_lower_1 <- damage_ind_1[, 2:no_states]; damage_lower_2 <- damage_ind_2[, 2:no_states]
-  damage_ind_1 <- damage_ind_1[, 1:(no_states-1)]; damage_ind_2 <- damage_ind_2[, 1:(no_states-1)]
+  damage_lower_1 <- as.matrix(damage_ind_1[, 2:no_states]);
+  damage_lower_2 <- as.matrix(damage_ind_2[, 2:no_states]);
+  damage_ind_1 <- as.matrix(damage_ind_1[, 1:(no_states-1)]);
+  damage_ind_2 <- as.matrix(damage_ind_2[, 1:(no_states-1)])
 
   damage_state_1 <- as.numeric(data.1$CDF) # Previously ordered.
   damage_state_2 <- as.numeric(data.2$CDF) # Previously ordered.
